@@ -28,6 +28,26 @@ module Fx
           ORDER BY pp.oid;
         EOS
 
+        AGGREGATES_WITH_DEFINITIONS_QUERY_PG10 = <<-EOS.freeze
+          SELECT
+              pp.proname AS name,
+              pg_get_function_identity_arguments(pp.oid) AS arguments,
+              pa.*,
+              format_type(pa.aggtranstype, null) AS aggtranstype,
+              format_type(pa.aggmtranstype, null) AS aggmtranstype
+          FROM pg_proc pp
+          JOIN pg_aggregate pa
+              ON pa.aggfnoid = pp.oid
+          JOIN pg_namespace pn
+              ON pn.oid = pp.pronamespace
+          LEFT JOIN pg_depend pd
+              ON pd.objid = pp.oid AND pd.deptype = 'e'
+          WHERE pn.nspname = 'public'
+            AND pp.proisagg
+            AND pd.objid IS NULL
+          ORDER BY pp.oid;
+        EOS
+
         # Wraps #all as a static facade.
         #
         # @return [Array<Fx::Aggregate>]
@@ -51,7 +71,15 @@ module Fx
         attr_reader :connection
 
         def aggregates_from_postgres
-          connection.execute(AGGREGATES_WITH_DEFINITIONS_QUERY)
+          if postgresql_10?
+            connection.execute(AGGREGATES_WITH_DEFINITIONS_QUERY_PG10)
+          else
+            connection.execute(AGGREGATES_WITH_DEFINITIONS_QUERY)
+          end
+        end
+
+        def postgresql_10?
+          connection.execute('SELECT version()').first['version'] =~ /PostgreSQL 10.*/
         end
 
         def to_fx_aggregate(result)
