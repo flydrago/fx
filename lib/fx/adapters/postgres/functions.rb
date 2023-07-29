@@ -27,6 +27,22 @@ module Fx
           ORDER BY pp.oid;
         EOS
 
+        FUNCTIONS_WITH_DEFINITIONS_QUERY_PG10 = <<-EOS.freeze
+          SELECT
+              pp.proname AS name,
+              pg_get_function_identity_arguments(pp.oid) AS arguments,
+              pg_get_functiondef(pp.oid) AS definition
+          FROM pg_proc pp
+          JOIN pg_namespace pn
+              ON pn.oid = pp.pronamespace
+          LEFT JOIN pg_depend pd
+              ON pd.objid = pp.oid AND pd.deptype = 'e'
+          WHERE pn.nspname = 'public'
+            AND NOT pp.proisagg
+            AND pd.objid IS NULL
+          ORDER BY pp.oid;
+        EOS
+
         # Wraps #all as a static facade.
         #
         # @return [Array<Fx::Function>]
@@ -51,7 +67,15 @@ module Fx
         attr_reader :connection
 
         def functions_from_postgres
-          connection.execute(FUNCTIONS_WITH_DEFINITIONS_QUERY)
+          if postgresql_10?
+            connection.execute(FUNCTIONS_WITH_DEFINITIONS_QUERY_PG10)
+          else
+            connection.execute(FUNCTIONS_WITH_DEFINITIONS_QUERY)
+          end
+        end
+
+        def postgresql_10?
+          connection.execute('SELECT version()').first['version'] =~ /PostgreSQL 10.*/
         end
 
         def to_fx_function(result)
