@@ -16,7 +16,7 @@ Gem::Specification.new do |spec|
   spec.homepage      = "https://github.com/teoljungberg/fx"
   spec.license       = 'MIT'
 
-  spec.files         = `git ls-files -z`.split("\x0")
+  spec.files         = Dir['lib/**/*.rb'] + Dir["bin/*"] + Dir['[A-Z]*']
   spec.test_files    = spec.files.grep(%r{^spec/})
   spec.require_paths = ['lib']
 
